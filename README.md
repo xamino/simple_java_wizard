@@ -5,9 +5,16 @@ shouldn't.
 
 ## Usage
 Really simple actually. See the Main class for a demonstration. Basically you
-give the Wizard class objects that implement the Step interface. Steps define
-their previous and next neighbours, dynamically changeable. Linear and more
-complex wizard flows are thus easily possible.
+give the Wizard class a starting object that implement the Step interface. Steps
+define their previous and next neighbours, dynamically changeable. Linear and
+more complex wizard flows are thus easily possible. The Wizard class handles the
+window, the Steps only have to handle their one JPanel. Wizard will flow through
+the sequence of Steps as the programmer has coded them. Wizard can be neatly
+closed with Wizard.EXIT(Step step) which will transform the given step into a
+special closing step with the given Step's content.
+
+The advancement of Steps can also be called programmatically, a feature that
+I required for where I used this little framework.
 
 ## License
 MIT – please attribute but otherwise feel free to do what you want with it.
