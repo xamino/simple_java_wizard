@@ -14,13 +14,26 @@ public class Main {
      * Variable that proves that we can move values between Steps.
      */
     private String name;
+    /**
+     * Reference to our wizard instance. We keep it so that we can generate our exit frame down below.
+     */
+    private Wizard wizard;
 
     public Main() {
-        // create a new wizard with the given title and a fixed window size
-        Wizard wizard = new Wizard("Demo Wizard", new Dimension(600, 400));
+        // pick a nice title for the wizard window
+        String title = "Demo Wizard";
+        // create the callback for what happens when we want the wizard to close
+        Wizard.WizardClose closeOperation = () -> {
+            // in this example case we want to quit the program, so... :
+            System.exit(0);
+        };
+        // set our preferred dimensions
+        Dimension dimension = new Dimension(400, 100);
+        // pass our parameters to wizard
+        wizard = new Wizard(title, closeOperation, dimension);
         // and now start the wizard with the given Step
         wizard.start(new StartWizard());
-        // the rest happen in Wizard, so done!
+        // the rest happens in Wizard, so done!
     }
 
     public static void main(String[] args) {
@@ -31,16 +44,16 @@ public class Main {
     /**
      * First panel.
      */
-    private class StartWizard implements Step {
+    private class StartWizard implements Wizard.Step {
 
         @Override
-        public Step next() {
+        public Wizard.Step next() {
             // give the wizard the next step. Usually as new Step, but you could reuse objects too.
             return new NameInputStep();
         }
 
         @Override
-        public Step previous() {
+        public Wizard.Step previous() {
             // This means nothing happens when the user presses previous. You could make the button exit the wizard
             // if you wanted a sensible alternative.
             return null;
@@ -59,12 +72,12 @@ public class Main {
     /**
      * Second panel with text entry.
      */
-    private class NameInputStep implements Step {
+    private class NameInputStep implements Wizard.Step {
 
         private JTextField text;
 
         @Override
-        public Step next() {
+        public Wizard.Step next() {
             // read name from textfield on next
             name = text.getText();
             // go to next step
@@ -72,7 +85,7 @@ public class Main {
         }
 
         @Override
-        public Step previous() {
+        public Wizard.Step previous() {
             // return to previous step
             return new StartWizard();
         }
@@ -93,20 +106,20 @@ public class Main {
     /**
      * Final panel where we read the name and display it.
      */
-    private class GreeterStep implements Step {
+    private class GreeterStep implements Wizard.Step {
 
         @Override
-        public Step next() {
+        public Wizard.Step next() {
             // use this to close the wizard:
-            return Wizard.EXIT(new Step() {
+            return wizard.createExit(new Wizard.Step() {
                 @Override
-                public Step next() {
+                public Wizard.Step next() {
                     // note that whatever you write here won't be called due to how EXIT works.
                     return null;
                 }
 
                 @Override
-                public Step previous() {
+                public Wizard.Step previous() {
                     // note that whatever you write here won't be called due to how EXIT works.
                     return null;
                 }
@@ -122,7 +135,7 @@ public class Main {
         }
 
         @Override
-        public Step previous() {
+        public Wizard.Step previous() {
             return new NameInputStep();
         }
 

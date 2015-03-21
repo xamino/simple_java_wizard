@@ -2,22 +2,26 @@ package eu.hartmann.wizard;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.awt.event.*;
 
 /**
  * Implements a simple but working Java wizard.
  *
  * @author Tamino Hartmann
  */
+// TODO: handle Layout better; etc
+// suppress executeNext and executePrevious warnings.
+@SuppressWarnings("UnusedDeclaration")
 public class Wizard {
 
-    // requires static references to work with static function
-    private static JButton next;
-    private static JButton previous;
     // action strings
-    private final String NEXT = "next";
-    private final String PREVIOUS = "previous";
+    private final String NEXT = "nextButton";
+    private final String PREVIOUS = "previousButton";
+    // callback for what happens if the wizard is to be closed
+    private final WizardClose wizardClose;
+    // references to the buttons
+    private JButton nextButton;
+    private JButton previousButton;
     // gui stuff
     private JPanel content;
     private JFrame masterFrame;
@@ -32,16 +36,19 @@ public class Wizard {
      * @param title The title of the wizard window.
      */
     public Wizard(String title) {
-        this(title, null);
+        this(title, null, null);
     }
 
     /**
-     * Creates a new wizard.
+     * Creates a new wizard with all given options.
      *
      * @param title         The title of the wizard window.
-     * @param preferredSize The preferred size of the complete wizard window.
+     * @param wizardClose   The callback for when the wizard is closed. Nullable.
+     * @param preferredSize The preferred size of the complete wizard window. Nullable.
      */
-    public Wizard(String title, Dimension preferredSize) {
+    public Wizard(String title, WizardClose wizardClose, Dimension preferredSize) {
+        // assign callback
+        this.wizardClose = wizardClose;
         // use system look and feel
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
@@ -49,8 +56,14 @@ public class Wizard {
             e.printStackTrace();
         }
         masterFrame = new JFrame(title);
-        // wizard will close on exit without further ado
-        masterFrame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        // call correct close operation even on window close:
+        masterFrame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent windowEvent) {
+                super.windowClosing(windowEvent);
+                handleWizardClose();
+            }
+        });
         if (preferredSize != null) {
             masterFrame.setPreferredSize(preferredSize);
         }
@@ -60,66 +73,80 @@ public class Wizard {
         content = new JPanel();
         content.setLayout(new BorderLayout());
         JPanel buttons = new JPanel();
-        next = new JButton("Next");
-        previous = new JButton("Previous");
+        nextButton = new JButton("Next");
+        nextButton.setMnemonic(KeyEvent.VK_N);
+        previousButton = new JButton("Previous");
+        previousButton.setMnemonic(KeyEvent.VK_P);
         // assign buttons
         ActionReceiver receiver = new ActionReceiver();
-        next.addActionListener(receiver);
-        previous.addActionListener(receiver);
-        next.setActionCommand(NEXT);
-        previous.setActionCommand(PREVIOUS);
-        buttons.add(previous);
-        buttons.add(next);
+        nextButton.addActionListener(receiver);
+        previousButton.addActionListener(receiver);
+        nextButton.setActionCommand(NEXT);
+        previousButton.setActionCommand(PREVIOUS);
+        buttons.add(previousButton);
+        buttons.add(nextButton);
         content.add(buttons, BorderLayout.SOUTH);
         masterFrame.add(content);
     }
 
     /**
-     * Given a step will take its content and generate a closing panel with it. Can also be used to close the wizard
-     * immediately.
+     * Given a step will take its content and generate a closing panel with it. Can also be used to call the WizardClose
+     * callback immediately if the step is null.
      *
-     * @param exitStep The Step used to generate the content from. If NULL the wizard will close immediately!
-     * @return The Step to use on the next() or previous() where you want to exit the wizard. Will close the wizard!
+     * @param exitStep The Step used to generate the content from. If NULL the wizard will call the WizardClose callback
+     *                 immediately!
+     * @return The Step to use on the nextButton() or previousButton() where you want to exit the wizard. Will call
+     * WizardClose immediately!
      */
-    public static Step EXIT(final Step exitStep) {
+    public Step createExit(Step exitStep) {
         // if null --> exit NOW
         if (exitStep == null) {
-            System.exit(0);
+            handleWizardClose();
             return null;
         }
         // tricky but cool: create a new step with special stuff but use the draw from the given step!
         return new Step() {
             @Override
             public Step next() {
-                // This can happen when the step is programmatically called next, so quit.
-                System.exit(0);
+                // This can happen when the step is programmatically called nextButton, so call WizardClose callback:
+                handleWizardClose();
                 return null;
             }
 
             @Override
             public Step previous() {
-                // This can happen when the step is programmatically called previous, so quit.
-                System.exit(0);
+                // This can happen when the step is programmatically called previousButton, so call WizardClose callback.
+                handleWizardClose();
                 return null;
             }
 
             @Override
             public JPanel draw() {
-                // disable previous button
-                previous.setEnabled(false);
-                // update next button text
-                next.setText("Exit");
+                // disable previousButton button
+                previousButton.setEnabled(false);
+                // update nextButton button text
+                nextButton.setText("Exit");
+                // set new mnemonic
+                nextButton.setMnemonic(KeyEvent.VK_E);
                 // override
-                next.addActionListener(new ActionListener() {
-                    @Override
-                    public void actionPerformed(ActionEvent actionEvent) {
-                        System.exit(0);
-                    }
-                });
+                nextButton.addActionListener(actionEvent -> handleWizardClose());
                 // now draw custom content:
                 return exitStep.draw();
             }
         };
+    }
+
+    /**
+     * If available will call the WizardClose callback. Finally the wizard will destroy its window.
+     */
+    private void handleWizardClose() {
+        if (wizardClose != null) {
+            wizardClose.onWizardClose();
+        }
+        // hide window
+        masterFrame.setVisible(false);
+        // dispose frame
+        masterFrame.dispose();
     }
 
     /**
@@ -168,17 +195,57 @@ public class Wizard {
     }
 
     /**
-     * Allows to programmatic go to the next Step. Equivalent to pressing the Next button.
+     * Allows to programmatic go to the nextButton Step. Equivalent to pressing the Next button.
      */
     public void executeNext() {
         goStep(currentStep.next());
     }
 
     /**
-     * Allows to programmatic go to the previous Step. Equivalent to pressing the Previous button.
+     * Allows to programmatic go to the previousButton Step. Equivalent to pressing the Previous button.
      */
     public void executePrevious() {
         goStep(currentStep.previous());
+    }
+
+    /**
+     * Interface that a wizard step must implement.
+     *
+     * @author Tamino Hartmann
+     */
+    public interface Step {
+        /**
+         * This method will be called when NEXT is pressed. It should return the next Step the wizard is to go to once
+         * this one is finished.
+         *
+         * @return The next Step. If null the wizard will not continue.
+         */
+        public Step next();
+
+        /**
+         * This method is called when PREVIOUS is pressed. It should return the previous Step that the wizard is supposed
+         * to return to.
+         *
+         * @return The previous Step. If null the wizard will not continue.
+         */
+        public Step previous();
+
+        /**
+         * Called to generate the JPanel the wizard will display when this step is to be shown. Guaranteed fresh!
+         *
+         * @return The JPanel to display.
+         */
+        public JPanel draw();
+    }
+
+    /**
+     * Interface for callback when the wizard finishes / is closed. Afterwards Wizard will hide and destroy the window.
+     */
+    public interface WizardClose {
+        /**
+         * Method that is called when the Wizard is to be closed.
+         */
+        public void onWizardClose();
     }
 
     /**
@@ -188,8 +255,10 @@ public class Wizard {
         @Override
         public void actionPerformed(ActionEvent e) {
             if (e.getActionCommand().equals(NEXT)) {
+                // go to the next step
                 goStep(currentStep.next());
             } else if (e.getActionCommand().equals(PREVIOUS)) {
+                // go to the previous step
                 goStep(currentStep.previous());
             } else {
                 JOptionPane.showMessageDialog(new JDialog(), "The received action event is unknown!", "Error", JOptionPane.INFORMATION_MESSAGE);
